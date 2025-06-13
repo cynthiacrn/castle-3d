@@ -19,14 +19,16 @@ const sizes = {
 
 // Camera
 const camera = new THREE.PerspectiveCamera(45, sizes.width / sizes.height, 0.1, 1000)
-camera.position.set(60, 45, 120)
-camera.lookAt(0, 20, 0)
+camera.position.set(60, 20, 120)
+camera.lookAt(0, 15, 0)
 scene.add(camera)
 
 // Controls
 const controls = new OrbitControls(camera, canvas)
 controls.enableDamping = true
 controls.enablePan = false
+controls.target.set(0, 15, 0)
+controls.update()
 
 // Renderer
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true })
@@ -47,8 +49,8 @@ envMap.encoding = THREE.sRGBEncoding
 scene.environment = envMap
 
 // Materials
-const castleMaterial = new THREE.MeshToonMaterial({ color: 0xe9d4b8 })
-const groundMaterial = new THREE.MeshToonMaterial({ color: 0xc8aa88 })
+const castleMaterial = new THREE.MeshToonMaterial({ color: '#e9d4b8' })
+const groundMaterial = new THREE.MeshToonMaterial({ color: '#d8bfa3' })
 
 const waterMaterial = new THREE.ShaderMaterial({
   vertexShader: waterVertexShader,
@@ -61,7 +63,7 @@ const waterMaterial = new THREE.ShaderMaterial({
     uWavesPersistence: { value: 0.8 },
     uWavesLacunarity: { value: 0.5 },
     uWavesIterations: { value: 5.0 },
-    uBaseColor: { value: new THREE.Color(0xe9d4b8) },
+    uBaseColor: { value: new THREE.Color('#e9d4b8') },
     uOpacity: { value: 1.0 }
   },
   side: THREE.DoubleSide,
@@ -117,7 +119,7 @@ gltfLoader.load('castle.glb', gltf => {
         }
         const line = new THREE.LineSegments(
           edges,
-          new THREE.LineBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.6 })
+          new THREE.LineBasicMaterial({ color: '#4e3718', transparent: true, opacity: 0.6 })
         )
         line.position.copy(child.position)
         line.rotation.copy(child.rotation)
