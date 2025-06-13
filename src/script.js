@@ -9,17 +9,13 @@ import waterVertexShader from './shaders/water/vertex.glsl'
 
 const canvas = document.querySelector('canvas.webgl')
 const scene = new THREE.Scene()
-const cubeLoader = new THREE.CubeTextureLoader()
-const environmentMap = cubeLoader.load([
-  'env/0/px.png', 'env/0/nx.png',
-  'env/0/py.png', 'env/0/ny.png',
-  'env/0/pz.png', 'env/0/nz.png'
-])
+const cubeLoader = new THREE.CubeTextureLoader().setPath('/env/2/');
+const envMap = cubeLoader.load([
+  'px.png','nx.png','py.png','ny.png','pz.png','nz.png'
+]);
 
-console.log(environmentMap)
-scene.background = environmentMap
-scene.environment = environmentMap
-// scene.background = new THREE.Color(0xf2ede2)
+scene.background = new THREE.Color('#E9D4B8')
+scene.environment = envMap
 
 const sizes = {
   width: window.innerWidth,
@@ -40,16 +36,14 @@ renderer.shadowMap.type = THREE.PCFSoftShadowMap
 const controls = new OrbitControls(camera, canvas)
 controls.enableDamping = true
 
-const sunLight = new THREE.DirectionalLight(0xfff7e0, 1.8)
-sunLight.position.set(60, 80, 40)
-sunLight.castShadow = true
-sunLight.shadow.mapSize.set(2048, 2048)
-scene.add(sunLight)
+const sun = new THREE.DirectionalLight(0xfff7e0, 1.8);
+sun.position.set(60,80,40);
+sun.castShadow = true;
+scene.add(sun);
+scene.add(new THREE.AmbientLight(0xddddcc,0.4));
 
 const ambient = new THREE.AmbientLight(0xddddcc, 0.4)
 scene.add(ambient)
-
-scene.add(new THREE.DirectionalLightHelper(sunLight, 5))
 
 const shaderMaterial = new THREE.ShaderMaterial({
   vertexShader,
@@ -61,37 +55,55 @@ const shaderMaterial = new THREE.ShaderMaterial({
   }
 })
 
-
 const waterMaterial = new THREE.ShaderMaterial({
   vertexShader: waterVertexShader,
   fragmentShader: waterFragmentShader,
   uniforms: {
     uTime: { value: 0 },
-    uEnvMap: { value: environmentMap },
-    uCameraPosition: { value: camera.position },
-    uRefractionRatio: { value: 0.98 },
-    uWaterColor: { value: new THREE.Color(0x447a9c) }
+    uWavesAmplitude: { value: 0.2 },
+    uWavesFrequency: { value: 0.3 },
+    uWavesSpeed: { value: 0.2 },
+    uWavesPersistence: { value: 0.4 },
+    uWavesLacunarity: { value: 2.0 },
+    uWavesIterations: { value: 4.0 },
+    uOpacity: { value: 0.7 },
+    uTroughColor: { value: new THREE.Color('#2F210E') },
+    uSurfaceColor: { value: new THREE.Color('#8C7B63') },
+    uPeakColor: { value: new THREE.Color('#E9D4B8') },
+    uTroughThreshold: { value: -0.2 },
+    uTroughTransition: { value: 0.2 },
+    uPeakThreshold: { value: 0.3 },
+    uPeakTransition: { value: 0.2 },
+    uFresnelScale: { value: 1.0 },
+    uFresnelPower: { value: 3.0 },
+    uEnvironmentMap: { value: envMap }
   },
-  transparent: true,
-})
+  side: THREE.DoubleSide,
+  transparent: true
+});
+
+envMap.encoding = THREE.sRGBEncoding
+renderer.outputEncoding = THREE.sRGBEncoding
 
 const dracoLoader = new DRACOLoader()
 dracoLoader.setDecoderPath('draco/')
 const gltfLoader = new GLTFLoader()
 gltfLoader.setDRACOLoader(dracoLoader)
 
-gltfLoader.load('castle.glb', (gltf) => {
-  console.log(gltf.scene)
-  gltf.scene.traverse((child) => {
-    if (child.name === "Water") {
-      child.material = waterMaterial
+
+gltfLoader.load('castle.glb', gltf => {
+  gltf.scene.traverse(child => {
+    if (child.name === 'Water') {
+      child.material = waterMaterial;
+      child.castShadow = false;
+      child.receiveShadow = false;
     } else {
-      child.material = shaderMaterial
-      child.castShadow = true
-      child.receiveShadow = true
+      child.material = shaderMaterial;
+      child.castShadow = true;
+      child.receiveShadow = true;
     }
-  })
-  scene.add(gltf.scene)
+  });
+  scene.add(gltf.scene);
 })
 
 window.addEventListener('resize', () => {
@@ -103,12 +115,11 @@ window.addEventListener('resize', () => {
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
 })
 
-const clock = new THREE.Clock()
-const tick = () => {
-  controls.update()
-  renderer.render(scene, camera)
-  requestAnimationFrame(tick)
-  waterMaterial.uniforms.uTime.value = clock.getElapsedTime()
-  waterMaterial.uniforms.uCameraPosition.value.copy(camera.position)
-}
-tick()
+const clock = new THREE.Clock();
+(function animate(){
+  controls.update();
+  const t = clock.getElapsedTime();
+  waterMaterial.uniforms.uTime.value = t;
+  renderer.render(scene, camera);
+  requestAnimationFrame(animate);
+})();
