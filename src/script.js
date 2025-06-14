@@ -8,9 +8,30 @@ import { OutlinePass } from 'three/examples/jsm/postprocessing/OutlinePass.js'
 import waterVertexShader from './shaders/water/vertex.glsl'
 import waterFragmentShader from './shaders/water/fragment.glsl'
 
+function createSunGradientTexture() {
+  const size = 1024
+  const canvas = document.createElement('canvas')
+  canvas.width = canvas.height = size
+  const ctx = canvas.getContext('2d')
+
+  const gradient = ctx.createRadialGradient(
+    size * 0.7, size * 0.5, size * 0.01,
+    size * 0.7, size * 0.5, size * 0.35
+  )
+  gradient.addColorStop(0, '#ffd98c')
+  gradient.addColorStop(1, '#e6b58f')
+
+  ctx.fillStyle = gradient
+  ctx.fillRect(0, 0, size, size)
+
+  const texture = new THREE.CanvasTexture(canvas)
+  texture.encoding = THREE.sRGBEncoding
+  return texture
+}
+
 const canvas = document.querySelector('canvas.webgl')
 const scene = new THREE.Scene()
-scene.background = new THREE.Color('#E9D4B8')
+scene.background = createSunGradientTexture()
 
 const sizes = {
   width: window.innerWidth,
@@ -36,17 +57,37 @@ renderer.setSize(sizes.width, sizes.height)
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
 renderer.outputEncoding = THREE.sRGBEncoding
 
+const sunGeometry = new THREE.SphereGeometry(20, 32, 32)
+const sunMaterial = new THREE.MeshBasicMaterial({
+  color: '#fff1c1',
+  transparent: true,
+  opacity: 0.6,
+  depthWrite: false
+})
+const sunMesh = new THREE.Mesh(sunGeometry, sunMaterial)
+sunMesh.material.opacity = 0.20
+sunMesh.position.set(10, 40, -90)
+scene.add(sunMesh)
+
+const haloMaterial = new THREE.MeshBasicMaterial({
+  color: '#fff1c1',
+  transparent: true,
+  opacity: 0.05,
+  depthWrite: false
+})
+const halo = new THREE.Mesh(new THREE.SphereGeometry(30, 32, 32), haloMaterial)
+halo.position.copy(sunMesh.position)
+scene.add(halo)
+
 // Lights
 scene.add(new THREE.AmbientLight(0xffffff, 0.6))
+const sunLight = new THREE.DirectionalLight(0xffe6b0, 1.2)
+sunLight.position.set(0, 60, -100)
+scene.add(sunLight)
+
 const sun = new THREE.DirectionalLight(0xffffff, 1.5)
 sun.position.set(40, 80, 40)
 scene.add(sun)
-
-// Environment
-const cubeLoader = new THREE.CubeTextureLoader().setPath('/env/2/')
-const envMap = cubeLoader.load(['px.png','nx.png','py.png','ny.png','pz.png','nz.png'])
-envMap.encoding = THREE.sRGBEncoding
-scene.environment = envMap
 
 // Materials
 const castleMaterial = new THREE.MeshToonMaterial({ color: '#e9d4b8' })
@@ -64,7 +105,9 @@ const waterMaterial = new THREE.ShaderMaterial({
     uWavesLacunarity: { value: 0.5 },
     uWavesIterations: { value: 5.0 },
     uBaseColor: { value: new THREE.Color('#e9d4b8') },
-    uOpacity: { value: 1.0 }
+    uOpacity: { value: 1.0 },
+    uSunColor: { value: new THREE.Color('#f6c189') },
+    uSunStrength: { value: 0.4 }
   },
   side: THREE.DoubleSide,
   transparent: false
@@ -104,14 +147,12 @@ gltfLoader.load('castle.glb', gltf => {
         child.castShadow = false
         child.receiveShadow = false
 
-        // → Seul le Ground a un contour via OutlinePass
         outlinePass.selectedObjects.push(child)
       } else {
         child.material = castleMaterial
         child.castShadow = true
         child.receiveShadow = true
 
-        // → EdgesGeometry classique pour le château uniquement
         const edges = new THREE.EdgesGeometry(child.geometry, 45)
         const jitter = edges.attributes.position.array
         for (let i = 0; i < jitter.length; i++) {
