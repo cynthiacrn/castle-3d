@@ -1,176 +1,36 @@
 import * as THREE from 'three'
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
-import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js'
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
-import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js'
-import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js'
-import { OutlinePass } from 'three/examples/jsm/postprocessing/OutlinePass.js'
-import waterVertexShader from './shaders/water/vertex.glsl'
-import waterFragmentShader from './shaders/water/fragment.glsl'
+import './style.css'
+import { createScene } from './scene.js'
+import { loadModel } from './utils/loadModel.js'
+import { setupPostProcessing } from './utils/postprocessing.js'
+import { createParticles } from './particles.js'
+import { materials } from './materials.js'
+import overlayTextureUrl from './assets/textures/paper-2.jpg'
 
-function createSunGradientTexture() {
-  const size = 1024
-  const canvas = document.createElement('canvas')
-  canvas.width = canvas.height = size
-  const ctx = canvas.getContext('2d')
-
-  const gradient = ctx.createRadialGradient(
-    size * 0.7, size * 0.5, size * 0.01,
-    size * 0.7, size * 0.5, size * 0.35
-  )
-  gradient.addColorStop(0, '#ffd98c')
-  gradient.addColorStop(1, '#e6b58f')
-
-  ctx.fillStyle = gradient
-  ctx.fillRect(0, 0, size, size)
-
-  const texture = new THREE.CanvasTexture(canvas)
-  texture.encoding = THREE.sRGBEncoding
-  return texture
-}
-
-const canvas = document.querySelector('canvas.webgl')
-const scene = new THREE.Scene()
-scene.background = createSunGradientTexture()
-
-const sizes = {
-  width: window.innerWidth,
-  height: window.innerHeight
-}
-
-// Camera
-const camera = new THREE.PerspectiveCamera(45, sizes.width / sizes.height, 0.1, 1000)
-camera.position.set(60, 20, 120)
-camera.lookAt(0, 15, 0)
-scene.add(camera)
-
-// Controls
-const controls = new OrbitControls(camera, canvas)
-controls.enableDamping = true
-controls.enablePan = false
-controls.target.set(0, 15, 0)
-controls.update()
-
-// Renderer
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true })
-renderer.setSize(sizes.width, sizes.height)
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
-renderer.outputEncoding = THREE.sRGBEncoding
-
-const sunGeometry = new THREE.SphereGeometry(20, 32, 32)
-const sunMaterial = new THREE.MeshBasicMaterial({
-  color: '#fff1c1',
-  transparent: true,
-  opacity: 0.6,
-  depthWrite: false
-})
-const sunMesh = new THREE.Mesh(sunGeometry, sunMaterial)
-sunMesh.material.opacity = 0.20
-sunMesh.position.set(10, 40, -90)
-scene.add(sunMesh)
-
-const haloMaterial = new THREE.MeshBasicMaterial({
-  color: '#fff1c1',
-  transparent: true,
-  opacity: 0.05,
-  depthWrite: false
-})
-const halo = new THREE.Mesh(new THREE.SphereGeometry(30, 32, 32), haloMaterial)
-halo.position.copy(sunMesh.position)
-scene.add(halo)
-
-// Lights
-scene.add(new THREE.AmbientLight(0xffffff, 0.6))
-const sunLight = new THREE.DirectionalLight(0xffe6b0, 1.2)
-sunLight.position.set(0, 60, -100)
-scene.add(sunLight)
-
-const sun = new THREE.DirectionalLight(0xffffff, 1.5)
-sun.position.set(40, 80, 40)
-scene.add(sun)
-
-// Materials
-const castleMaterial = new THREE.MeshToonMaterial({ color: '#e9d4b8' })
-const groundMaterial = new THREE.MeshToonMaterial({ color: '#d8bfa3' })
-
-const waterMaterial = new THREE.ShaderMaterial({
-  vertexShader: waterVertexShader,
-  fragmentShader: waterFragmentShader,
-  uniforms: {
-    uTime: { value: 0 },
-    uWavesAmplitude: { value: 0.5 },
-    uWavesFrequency: { value: 0.12 },
-    uWavesSpeed: { value: 0.3 },
-    uWavesPersistence: { value: 0.8 },
-    uWavesLacunarity: { value: 0.5 },
-    uWavesIterations: { value: 5.0 },
-    uBaseColor: { value: new THREE.Color('#e9d4b8') },
-    uOpacity: { value: 1.0 },
-    uSunColor: { value: new THREE.Color('#f6c189') },
-    uSunStrength: { value: 0.4 }
-  },
-  side: THREE.DoubleSide,
-  transparent: false
-})
-
-// Postprocessing composer
-const composer = new EffectComposer(renderer)
-composer.addPass(new RenderPass(scene, camera))
-
-const outlinePass = new OutlinePass(
-  new THREE.Vector2(sizes.width, sizes.height),
+const {
   scene,
-  camera
-)
-outlinePass.edgeStrength = 2.5
-outlinePass.edgeGlow = 0
-outlinePass.edgeThickness = 1.0
-outlinePass.visibleEdgeColor.set('#000000')
-outlinePass.hiddenEdgeColor.set('#000000')
-composer.addPass(outlinePass)
+  camera,
+  renderer,
+  controls,
+  sizes,
+  canvas
+} = createScene()
 
-// Load GLTF
-const dracoLoader = new DRACOLoader()
-dracoLoader.setDecoderPath('draco/')
-const gltfLoader = new GLTFLoader()
-gltfLoader.setDRACOLoader(dracoLoader)
+const sceneGroup = new THREE.Group()
+scene.add(sceneGroup)
 
-gltfLoader.load('castle.glb', gltf => {
-  gltf.scene.traverse(child => {
-    if (child.isMesh) {
-      if (child.name === 'Water') {
-        child.material = waterMaterial
-        child.castShadow = false
-        child.receiveShadow = false
-      } else if (child.name === 'Ground') {
-        child.material = groundMaterial
-        child.castShadow = false
-        child.receiveShadow = false
+const cameraInitialPosition = camera.position.clone()
+const lookAtTarget = new THREE.Vector3(0, 15, 0)
 
-        outlinePass.selectedObjects.push(child)
-      } else {
-        child.material = castleMaterial
-        child.castShadow = true
-        child.receiveShadow = true
+// Particles
+const { particleMaterial, particles } = createParticles()
+scene.add(particles)
 
-        const edges = new THREE.EdgesGeometry(child.geometry, 45)
-        const jitter = edges.attributes.position.array
-        for (let i = 0; i < jitter.length; i++) {
-          jitter[i] += (Math.random() - 0.5) * 0.02
-        }
-        const line = new THREE.LineSegments(
-          edges,
-          new THREE.LineBasicMaterial({ color: '#4e3718', transparent: true, opacity: 0.6 })
-        )
-        line.position.copy(child.position)
-        line.rotation.copy(child.rotation)
-        line.scale.copy(child.scale)
-        scene.add(line)
-      }
-    }
-  })
-  scene.add(gltf.scene)
-})
+// Postprocessing
+const { composer, outlinePass, overlayPass} = setupPostProcessing(renderer, scene, camera, sizes, overlayTextureUrl)
+
+// Model loading
+loadModel(sceneGroup, materials, outlinePass)
 
 // Resize
 window.addEventListener('resize', () => {
@@ -184,10 +44,27 @@ window.addEventListener('resize', () => {
 })
 
 // Animate
+const mouse = new THREE.Vector2(0, 0)
+window.addEventListener('mousemove', (e) => {
+  mouse.x = (e.clientX / sizes.width - 0.5) * 2
+  mouse.y = -(e.clientY / sizes.height - 0.5) * 2
+})
+
 const clock = new THREE.Clock()
 function animate() {
+  const t = clock.getElapsedTime()
+  materials.waterMaterial.uniforms.uTime.value = t
+  particleMaterial.uniforms.uTime.value = t
+
+  sceneGroup.position.x = mouse.x * 2
+  sceneGroup.position.y = mouse.y
+
+  // If overlay shader supports uMouse, update it:
+  if (overlayPass?.uniforms?.uMouse) {
+    overlayPass.uniforms.uMouse.value.set(mouse.x, mouse.y)
+  }
+
   controls.update()
-  waterMaterial.uniforms.uTime.value = clock.getElapsedTime()
   composer.render()
   requestAnimationFrame(animate)
 }
